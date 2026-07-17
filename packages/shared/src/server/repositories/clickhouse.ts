@@ -264,14 +264,17 @@ export async function* queryClickhouseStream<T>(
     kind: SpanKind.CLIENT,
   });
 
-  let queryId: string | undefined;
+  // Client-generated so failures before/without a response still carry a
+  // query_id on errors and spans; system.query_log stays pollable by id.
+  const queryId = randomUUID();
 
   try {
     setSpanQueryAttributes(span, opts.query);
+    span.setAttribute("ch.queryId", queryId);
 
     const res = await context
       .with(trace.setSpan(context.active(), span), () =>
-        sendClickhouseQuery({ ...opts, format: "JSONEachRow", span }),
+        sendClickhouseQuery({ ...opts, format: "JSONEachRow", span, queryId }),
       )
       .catch((error) => {
         throw ClickHouseResourceError.wrapIfResourceError(
@@ -279,9 +282,6 @@ export async function* queryClickhouseStream<T>(
           normalizedTags,
         );
       });
-
-    queryId = res.query_id;
-    span.setAttribute("ch.queryId", queryId);
 
     for await (const rows of res.stream<T>()) {
       for (const row of rows) {
@@ -335,14 +335,17 @@ export async function* queryClickhouseStreamRawText(
     kind: SpanKind.CLIENT,
   });
 
-  let queryId: string | undefined;
+  // Client-generated so failures before/without a response still carry a
+  // query_id on errors and spans; system.query_log stays pollable by id.
+  const queryId = randomUUID();
 
   try {
     setSpanQueryAttributes(span, opts.query);
+    span.setAttribute("ch.queryId", queryId);
 
     const res = await context
       .with(trace.setSpan(context.active(), span), () =>
-        sendClickhouseQuery({ ...opts, format: "JSONEachRow", span }),
+        sendClickhouseQuery({ ...opts, format: "JSONEachRow", span, queryId }),
       )
       .catch((error) => {
         throw ClickHouseResourceError.wrapIfResourceError(
@@ -350,9 +353,6 @@ export async function* queryClickhouseStreamRawText(
           normalizedTags,
         );
       });
-
-    queryId = res.query_id;
-    span.setAttribute("ch.queryId", queryId);
 
     for await (const rows of res.stream()) {
       for (const row of rows) {
@@ -420,11 +420,14 @@ export async function queryClickhouseExecRaw(
     kind: SpanKind.CLIENT,
   });
 
-  let queryId: string | undefined;
+  // Client-generated so failures before/without a response still carry a
+  // query_id on errors and spans; system.query_log stays pollable by id.
+  const queryId = randomUUID();
 
   try {
     const queryWithFormat = `${opts.query}\nFORMAT ${opts.format}`;
     setSpanQueryAttributes(span, queryWithFormat);
+    span.setAttribute("ch.queryId", queryId);
 
     const res = await context
       .with(trace.setSpan(context.active(), span), () =>
@@ -434,6 +437,7 @@ export async function queryClickhouseExecRaw(
         ).exec({
           query: queryWithFormat,
           query_params: opts.params,
+          query_id: queryId,
           clickhouse_settings: {
             ...opts.clickhouseSettings,
             log_comment: JSON.stringify(normalizedTags),
@@ -446,9 +450,6 @@ export async function queryClickhouseExecRaw(
           normalizedTags,
         );
       });
-
-    queryId = res.query_id;
-    span.setAttribute("ch.queryId", queryId);
     for (const [key, value] of Object.entries(normalizedTags)) {
       span.setAttribute(`ch.tag.${key}`, value);
     }
@@ -594,6 +595,7 @@ async function sendClickhouseQuery<F extends DataFormat>(opts: {
   clickhouseSettings?: ClickHouseSettings;
   format: F;
   span: Span;
+  queryId?: string;
 }) {
   const normalizedTags = normalizeClickHouseQueryTags(opts.tags);
   const res = await clickhouseClient(
@@ -603,6 +605,7 @@ async function sendClickhouseQuery<F extends DataFormat>(opts: {
     query: opts.query,
     format: opts.format,
     query_params: opts.params,
+    ...(opts.queryId ? { query_id: opts.queryId } : {}),
     clickhouse_settings: {
       ...opts.clickhouseSettings,
       log_comment: JSON.stringify(normalizedTags),
