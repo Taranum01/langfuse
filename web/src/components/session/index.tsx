@@ -317,8 +317,11 @@ export const SessionPage: React.FC<{
     () => ({
       expandConfig: {
         basePath: `/project/${projectId}/traces`,
+        pathParam: "traceId",
       },
-      queryParams: ["observation", "display", "timestamp"],
+      // traceId: not written here, but cleared so a v4-dialect shared URL
+      // cannot pin the trace peek (LFE-11041).
+      queryParams: ["observation", "display", "timestamp", "traceId"],
       extractParamsValuesFromRow: (row: any) => ({
         timestamp: row.timestamp.toISOString(),
       }),
@@ -700,8 +703,11 @@ const LoadedSessionEventsPage: React.FC<{
     () => ({
       expandConfig: {
         basePath: `/project/${projectId}/traces`,
+        pathParam: "traceId",
       },
-      queryParams: ["observation", "display", "timestamp"],
+      // traceId: not written here, but cleared so a v4-dialect shared URL
+      // cannot pin the trace peek (LFE-11041).
+      queryParams: ["observation", "display", "timestamp", "traceId"],
       // observationId: set by a card's "Open in trace view" on a truncated
       // observation so the peek opens AT that observation (LFE-10958).
       extractParamsValuesFromRow: (row: any) => ({
